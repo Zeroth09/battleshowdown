@@ -16,6 +16,7 @@ import {
   Square
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
+import { io, Socket } from 'socket.io-client';
 
 interface Pertanyaan {
   id: string;
@@ -44,6 +45,9 @@ export default function GameMasterPage() {
   const [pertanyaanAktif, setPertanyaanAktif] = useState<Pertanyaan | null>(null);
   const [waktuTersisa, setWaktuTersisa] = useState(0);
   const router = useRouter();
+  const [socket, setSocket] = useState<Socket | null>(null);
+  const [isConnected, setIsConnected] = useState(false);
+  const [gameMasterId, setGameMasterId] = useState<string>('');
 
   useEffect(() => {
     // Simulasi data pemain online
@@ -72,6 +76,51 @@ export default function GameMasterPage() {
         waktu: 25
       }
     ]);
+  }, []);
+
+  useEffect(() => {
+    const existingId = localStorage.getItem('gameMasterId') || `gm_${Date.now()}`;
+    localStorage.setItem('gameMasterId', existingId);
+    setGameMasterId(existingId);
+  }, []);
+
+  useEffect(() => {
+    const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:5000';
+    const s = io(backendUrl, { transports: ['websocket', 'polling'] });
+    setSocket(s);
+
+    s.on('connect', () => setIsConnected(true));
+    s.on('disconnect', () => setIsConnected(false));
+
+    s.on('global-battle-start', (data: any) => {
+      try {
+        // Sinkronkan tampilan GM dengan pertanyaan yang dikirim ke peserta
+        const battleData = data?.battleData;
+        if (battleData) {
+          setStatusGame('playing');
+          setPertanyaanAktif({
+            id: battleData.id,
+            pertanyaan: battleData.pertanyaan,
+            pilihan: Object.values(battleData.pilihanJawaban || {}),
+            jawabanBenar: battleData.jawabanBenar,
+            waktu: 30,
+          });
+          setWaktuTersisa(30);
+        }
+      } catch (e) {
+        console.error('Error handling global-battle-start on GM:', e);
+      }
+    });
+
+    s.on('global-battle-end', () => {
+      setStatusGame('idle');
+      setPertanyaanAktif(null);
+      setWaktuTersisa(0);
+    });
+
+    return () => {
+      s.disconnect();
+    };
   }, []);
 
   useEffect(() => {
@@ -124,9 +173,14 @@ export default function GameMasterPage() {
   };
 
   const handleMulaiGame = (pertanyaan: Pertanyaan) => {
-    setPertanyaanAktif(pertanyaan);
-    setWaktuTersisa(pertanyaan.waktu);
-    setStatusGame('playing');
+    // Ubah: trigger ke server, bukan hanya set state lokal
+    if (!socket || !isConnected) {
+      alert('Belum terhubung ke server. Coba lagi sebentar.');
+      return;
+    }
+    socket.emit('game-master-trigger-battle', {
+      gameMasterId,
+    });
   };
 
   const handlePauseGame = () => {
@@ -141,6 +195,12 @@ export default function GameMasterPage() {
     setStatusGame('idle');
     setPertanyaanAktif(null);
     setWaktuTersisa(0);
+    if (socket && isConnected) {
+      socket.emit('game-master-end-battle', {
+        result: { message: 'Battle dihentikan oleh Game Master' },
+        gameMasterId,
+      });
+    }
   };
 
   return (
