@@ -63,7 +63,7 @@ const SocketManager = forwardRef<SocketManagerRef, SocketManagerProps>(
     // Initialize socket connection with retry logic
     const initializeSocket = useCallback(() => {
       try {
-        const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'https://battleshowdownback-production-df38.up.railway.app';
+        const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'https://battleshowdown-production.up.railway.app';
         
         console.log('🔌 Attempting to connect to:', backendUrl);
         
