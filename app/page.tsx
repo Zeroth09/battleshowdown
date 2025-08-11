@@ -20,15 +20,17 @@ export default function HomePage() {
 
     setIsLoading(true);
     
+    const pemainId = `user_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+
     // Simpan data pemain ke localStorage
-    localStorage.setItem('pemainData', JSON.stringify({
+    localStorage.setItem('user', JSON.stringify({
+      pemainId,
       nama: nama.trim(),
       tim,
-      masukAt: new Date().toISOString()
     }));
 
-    // Redirect ke lobby
-    router.push('/lobby');
+    // Redirect ke lomba (real-time)
+    router.push('/lomba');
   };
 
   return (
