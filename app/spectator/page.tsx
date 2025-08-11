@@ -13,6 +13,9 @@ import {
   Target
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
+import dynamic from 'next/dynamic';
+
+const SocketManager = dynamic(() => import('../../components/SocketManager'), { ssr: false });
 
 interface Pemain {
   id: string;
@@ -65,6 +68,57 @@ export default function SpectatorPage() {
   });
   const [hasilPertanyaan, setHasilPertanyaan] = useState<HasilPertanyaan | null>(null);
   const router = useRouter();
+
+  // Add minimal user identity for spectator join
+  const spectatorUser = { pemainId: 'spectator_' + (typeof window !== 'undefined' ? (localStorage.getItem('spectatorId') || Date.now().toString()) : 'ssr'), nama: 'Spectator', tim: 'merah' as const };
+  if (typeof window !== 'undefined' && !localStorage.getItem('spectatorId')) {
+    localStorage.setItem('spectatorId', spectatorUser.pemainId);
+  }
+
+  // Realtime handlers
+  const handleBattleStart = (battleData: any) => {
+    setPertanyaanAktif({
+      id: battleData.id,
+      pertanyaan: battleData.pertanyaan,
+      pilihan: Object.values(battleData.pilihanJawaban || {}),
+      jawabanBenar: battleData.jawabanBenar,
+      waktu: 30,
+    });
+    setStatusGame('pertanyaan');
+    setWaktuTersisa(30);
+  };
+
+  const handleBattleEnd = (result: any) => {
+    setStatusGame('hasil');
+    setHasilPertanyaan({
+      jawabanBenar: result?.jawabanBenar || '',
+      skorTim: { merah: 0, putih: 0 },
+      pemenang: result?.pemenang?.tim || '-',
+      statistikJawaban: {},
+    });
+  };
+
+  const handleLiveAnswer = (answerData: any) => {
+    // Optionally aggregate stats here
+  };
+
+  const handleLobbyUpdate = (data: any) => {
+    try {
+      const players = Array.isArray(data?.players) ? data.players : [];
+      const mapped: Pemain[] = players.map((p: any) => ({
+        id: p.pemainId,
+        nama: p.nama,
+        tim: p.tim,
+        status: 'online',
+        skor: 0,
+      }));
+      setPemain(mapped);
+    } catch {}
+  };
+
+  const handleSpectatorUpdate = (data: any) => {
+    // Could show spectator count if needed
+  };
 
   useEffect(() => {
     // Simulasi data pemain
@@ -423,6 +477,17 @@ export default function SpectatorPage() {
           </div>
         </div>
       </div>
+
+      {/* Socket Manager for realtime spectator */}
+      <SocketManager
+        user={spectatorUser}
+        onBattleStart={handleBattleStart}
+        onBattleEnd={handleBattleEnd}
+        onLiveAnswer={handleLiveAnswer}
+        onLobbyUpdate={handleLobbyUpdate}
+        onSpectatorUpdate={handleSpectatorUpdate}
+        role="spectator"
+      />
     </div>
   );
 } 

@@ -43,6 +43,9 @@ interface SocketManagerProps {
   onBattleStart?: (battleData: Battle) => void;
   onBattleEnd?: (result: any) => void;
   onLiveAnswer?: (answerData: LiveAnswer) => void;
+  onLobbyUpdate?: (data: any) => void;
+  onSpectatorUpdate?: (data: any) => void;
+  role?: 'player' | 'spectator';
 }
 
 export interface SocketManagerRef {
@@ -54,16 +57,18 @@ export interface SocketManagerRef {
 }
 
 const SocketManager = forwardRef<SocketManagerRef, SocketManagerProps>(
-  ({ user, onReady, onBattleStart, onBattleEnd, onLiveAnswer }, ref) => {
+  ({ user, onReady, onBattleStart, onBattleEnd, onLiveAnswer, onLobbyUpdate, onSpectatorUpdate, role = 'player' }, ref) => {
     const [socket, setSocket] = useState<Socket | null>(null);
     const [isConnected, setIsConnected] = useState(false);
     const [connectionAttempts, setConnectionAttempts] = useState(0);
     const [maxRetries] = useState(5);
+    const [geoWatchId, setGeoWatchId] = useState<number | null>(null);
+    const [lastGeoSentAt, setLastGeoSentAt] = useState<number>(0);
 
     // Initialize socket connection with retry logic
     const initializeSocket = useCallback(() => {
       try {
-        const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'https://battleshowdown-production.up.railway.app';
+        const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8080';
         
         console.log('🔌 Attempting to connect to:', backendUrl);
         
@@ -82,13 +87,20 @@ const SocketManager = forwardRef<SocketManagerRef, SocketManagerProps>(
           setIsConnected(true);
           setConnectionAttempts(0);
           
-          // Send user data to server
-          newSocket.emit('join-lobby', {
-            pemainId: user.pemainId,
-            nama: user.nama,
-            tim: user.tim,
-            lokasi: user.lokasi
-          });
+          // Send user data to server depending on role
+          if (role === 'player') {
+            newSocket.emit('join-lobby', {
+              pemainId: user.pemainId,
+              nama: user.nama,
+              tim: user.tim,
+              lokasi: user.lokasi
+            });
+          } else if (role === 'spectator') {
+            newSocket.emit('join-spectator', {
+              spectatorId: user.pemainId,
+              nama: user.nama,
+            });
+          }
         });
 
         newSocket.on('disconnect', (reason) => {
@@ -195,11 +207,21 @@ const SocketManager = forwardRef<SocketManagerRef, SocketManagerProps>(
         // Lobby events
         newSocket.on('lobby-update', (data: any) => {
           console.log('👥 Lobby updated:', data);
+          try {
+            onLobbyUpdate?.(data);
+          } catch (error) {
+            console.error('Error in lobby-update handler:', error);
+          }
         });
 
         // Spectator events
         newSocket.on('spectator-update', (data: any) => {
           console.log('👁️ Spectator update:', data);
+          try {
+            onSpectatorUpdate?.(data);
+          } catch (error) {
+            console.error('Error in spectator-update handler:', error);
+          }
         });
 
         setSocket(newSocket);
@@ -223,13 +245,47 @@ const SocketManager = forwardRef<SocketManagerRef, SocketManagerProps>(
         console.error('❌ Error initializing socket:', error);
         return () => {};
       }
-    }, [user, onReady, onBattleStart, onBattleEnd, onLiveAnswer, connectionAttempts, maxRetries, isConnected]);
+    }, [user, onReady, onBattleStart, onBattleEnd, onLiveAnswer, onLobbyUpdate, onSpectatorUpdate, connectionAttempts, maxRetries, isConnected, role]);
 
     // Initialize socket on mount
     useEffect(() => {
       const cleanup = initializeSocket();
       return cleanup;
     }, [initializeSocket]);
+
+    // Geolocation watcher for players
+    useEffect(() => {
+      if (!('geolocation' in navigator)) return;
+      if (!socket || !socket.connected) return;
+      if (role !== 'player') return;
+
+      const throttleMs = 10000; // send at most every 10s
+
+      const watchId = navigator.geolocation.watchPosition(
+        (pos) => {
+          try {
+            const now = Date.now();
+            if (now - lastGeoSentAt < throttleMs) return;
+            setLastGeoSentAt(now);
+
+            const { latitude, longitude } = pos.coords as GeolocationCoordinates & { latitude: number; longitude: number };
+            socket.emit('update-lokasi', { latitude, longitude });
+          } catch (err) {
+            console.error('Error sending geolocation:', err);
+          }
+        },
+        (err) => {
+          console.warn('Geolocation error:', err);
+        },
+        { enableHighAccuracy: true, maximumAge: 5000, timeout: 20000 }
+      );
+
+      setGeoWatchId(watchId);
+
+      return () => {
+        if (watchId != null) navigator.geolocation.clearWatch(watchId);
+      };
+    }, [socket, role, lastGeoSentAt]);
 
     // Expose methods via ref
     useImperativeHandle(ref, () => ({
