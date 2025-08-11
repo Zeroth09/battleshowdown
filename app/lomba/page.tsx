@@ -441,6 +441,8 @@ const LombaPageContent = () => {
           onReady={handleSocketReady}
           onBattleStart={handleBattleStart}
           onBattleEnd={handleBattleEnd}
+          onLobbyUpdate={handleLobbyUpdate}
+          role="player"
         />
       )}
     </div>
