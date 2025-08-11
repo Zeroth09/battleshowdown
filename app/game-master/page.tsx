@@ -50,32 +50,7 @@ export default function GameMasterPage() {
   const [gameMasterId, setGameMasterId] = useState<string>('');
 
   useEffect(() => {
-    // Simulasi data pemain online
-    setPemainOnline([
-      { id: '1', nama: 'Budi', tim: 'merah', status: 'online', skor: 85 },
-      { id: '2', nama: 'Sari', tim: 'putih', status: 'online', skor: 92 },
-      { id: '3', nama: 'Rudi', tim: 'merah', status: 'online', skor: 78 },
-      { id: '4', nama: 'Dewi', tim: 'putih', status: 'online', skor: 88 },
-      { id: '5', nama: 'Ahmad', tim: 'merah', status: 'offline', skor: 65 },
-    ]);
-
-    // Simulasi pertanyaan yang sudah ada
-    setPertanyaanList([
-      {
-        id: '1',
-        pertanyaan: 'Apa ibukota Indonesia?',
-        pilihan: ['Jakarta', 'Bandung', 'Surabaya', 'Yogyakarta'],
-        jawabanBenar: 'Jakarta',
-        waktu: 30
-      },
-      {
-        id: '2',
-        pertanyaan: 'Berapa hasil dari 7 x 8?',
-        pilihan: ['54', '56', '58', '60'],
-        jawabanBenar: '56',
-        waktu: 25
-      }
-    ]);
+    // No seeding: players and questions come from live data
   }, []);
 
   useEffect(() => {
@@ -92,9 +67,24 @@ export default function GameMasterPage() {
     s.on('connect', () => setIsConnected(true));
     s.on('disconnect', () => setIsConnected(false));
 
+    s.on('lobby-update', (data: any) => {
+      try {
+        const players = Array.isArray(data?.players) ? data.players : [];
+        const mapped: Pemain[] = players.map((p: any) => ({
+          id: p.pemainId,
+          nama: p.nama,
+          tim: p.tim,
+          status: 'online',
+          skor: 0,
+        }));
+        setPemainOnline(mapped);
+      } catch (e) {
+        console.error('Error mapping lobby-update:', e);
+      }
+    });
+
     s.on('global-battle-start', (data: any) => {
       try {
-        // Sinkronkan tampilan GM dengan pertanyaan yang dikirim ke peserta
         const battleData = data?.battleData;
         if (battleData) {
           setStatusGame('playing');
