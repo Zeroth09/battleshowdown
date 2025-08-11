@@ -60,7 +60,7 @@ export default function GameMasterPage() {
   }, []);
 
   useEffect(() => {
-    const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:5000';
+    const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'https://battleshowdown-production.up.railway.app';
     const s = io(backendUrl, { transports: ['websocket', 'polling'] });
     setSocket(s);
 
