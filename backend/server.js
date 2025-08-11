@@ -80,19 +80,36 @@ async function ambilPertanyaanRandom() {
       return null;
     }
 
-    // Skip header row and get random question
-    const randomIndex = Math.floor(Math.random() * (rows.length - 1)) + 1;
+    // Get random question row
+    const randomIndex = Math.floor(Math.random() * rows.length);
     const question = rows[randomIndex];
-    
+
+    const safeGet = (primaryKey, altKey) => {
+      try {
+        if (typeof question.get === 'function') {
+          return question.get(primaryKey) || (altKey ? question.get(altKey) : undefined);
+        }
+        return question[primaryKey] || (altKey ? question[altKey] : undefined);
+      } catch {
+        return undefined;
+      }
+    };
+
+    const pilihanA = safeGet('pilihan_a', 'a');
+    const pilihanB = safeGet('pilihan_b', 'b');
+    const pilihanC = safeGet('pilihan_c', 'c');
+    const pilihanD = safeGet('pilihan_d', 'd');
+    const jawabanBenarRaw = safeGet('jawaban_benar', 'jawaban');
+
     return {
-      pertanyaan: question.get('pertanyaan'),
+      pertanyaan: safeGet('pertanyaan', 'Pertanyaan'),
       pilihanJawaban: {
-        a: question.get('a'),
-        b: question.get('b'),
-        c: question.get('c'),
-        d: question.get('d')
+        a: pilihanA,
+        b: pilihanB,
+        c: pilihanC,
+        d: pilihanD,
       },
-      jawabanBenar: question.get('jawaban_benar')
+      jawabanBenar: (jawabanBenarRaw || '').toString().trim().toLowerCase()
     };
   } catch (error) {
     console.error('❌ Error getting random question:', error);

@@ -43,6 +43,7 @@ interface SocketManagerProps {
   onBattleStart?: (battleData: Battle) => void;
   onBattleEnd?: (result: any) => void;
   onLiveAnswer?: (answerData: LiveAnswer) => void;
+  mode?: 'player' | 'spectator';
 }
 
 export interface SocketManagerRef {
@@ -54,7 +55,7 @@ export interface SocketManagerRef {
 }
 
 const SocketManager = forwardRef<SocketManagerRef, SocketManagerProps>(
-  ({ user, onReady, onBattleStart, onBattleEnd, onLiveAnswer }, ref) => {
+  ({ user, onReady, onBattleStart, onBattleEnd, onLiveAnswer, mode = 'player' }, ref) => {
     const [socket, setSocket] = useState<Socket | null>(null);
     const [isConnected, setIsConnected] = useState(false);
     const [connectionAttempts, setConnectionAttempts] = useState(0);
@@ -82,13 +83,24 @@ const SocketManager = forwardRef<SocketManagerRef, SocketManagerProps>(
           setIsConnected(true);
           setConnectionAttempts(0);
           
-          // Send user data to server
-          newSocket.emit('join-lobby', {
-            pemainId: user.pemainId,
-            nama: user.nama,
-            tim: user.tim,
-            lokasi: user.lokasi
-          });
+          // Join according to mode
+          try {
+            if (mode === 'player') {
+              newSocket.emit('join-lobby', {
+                pemainId: user.pemainId,
+                nama: user.nama,
+                tim: user.tim,
+                lokasi: user.lokasi
+              });
+            } else {
+              newSocket.emit('join-spectator', {
+                spectatorId: user.pemainId,
+                nama: user.nama
+              });
+            }
+          } catch (e) {
+            console.error('Error emitting join event:', e);
+          }
         });
 
         newSocket.on('disconnect', (reason) => {
@@ -223,7 +235,7 @@ const SocketManager = forwardRef<SocketManagerRef, SocketManagerProps>(
         console.error('❌ Error initializing socket:', error);
         return () => {};
       }
-    }, [user, onReady, onBattleStart, onBattleEnd, onLiveAnswer, connectionAttempts, maxRetries, isConnected]);
+    }, [user, onReady, onBattleStart, onBattleEnd, onLiveAnswer, mode, connectionAttempts, maxRetries, isConnected]);
 
     // Initialize socket on mount
     useEffect(() => {

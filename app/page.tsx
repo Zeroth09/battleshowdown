@@ -19,16 +19,25 @@ export default function HomePage() {
     }
 
     setIsLoading(true);
-    
-    // Simpan data pemain ke localStorage
+
+    const pemainId = `p_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+
+    // Simpan data pemain (kompatibilitas lama)
     localStorage.setItem('pemainData', JSON.stringify({
       nama: nama.trim(),
       tim,
       masukAt: new Date().toISOString()
     }));
 
-    // Redirect ke lobby
-    router.push('/lobby');
+    // Simpan data user untuk socket
+    localStorage.setItem('user', JSON.stringify({
+      pemainId,
+      nama: nama.trim(),
+      tim
+    }));
+
+    // Redirect ke halaman pemain (lobby real-time)
+    router.push('/lomba');
   };
 
   return (
