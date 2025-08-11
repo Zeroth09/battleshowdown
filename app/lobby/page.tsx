@@ -1,14 +1,16 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
+import dynamic from 'next/dynamic';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Users, Clock, Trophy, Zap, AlertCircle, CheckCircle } from 'lucide-react';
+import { Users, Clock, Zap, CheckCircle } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 
 interface PemainData {
   nama: string;
   tim: string;
   masukAt: string;
+  pemainId?: string;
 }
 
 interface Pertanyaan {
@@ -18,14 +20,16 @@ interface Pertanyaan {
   waktu: number;
 }
 
+// Dynamic import SocketManager (client-only)
+const SocketManager = dynamic(() => import('../../components/SocketManager'), { ssr: false });
+
 export default function LobbyPage() {
   const [pemainData, setPemainData] = useState<PemainData | null>(null);
   const [pemainLain, setPemainLain] = useState<PemainData[]>([]);
-  const [status, setStatus] = useState<'menunggu' | 'pertanyaan' | 'hasil'>('menunggu');
+  const [status, setStatus] = useState<'menunggu' | 'pertanyaan'>('menunggu');
   const [pertanyaan, setPertanyaan] = useState<Pertanyaan | null>(null);
   const [waktuTersisa, setWaktuTersisa] = useState(0);
   const [jawabanDipilih, setJawabanDipilih] = useState<string | null>(null);
-  const [hasil, setHasil] = useState<any>(null);
   const router = useRouter();
 
   useEffect(() => {
@@ -36,78 +40,61 @@ export default function LobbyPage() {
       return;
     }
 
-    const parsedData = JSON.parse(data);
+    const parsedData: PemainData = JSON.parse(data);
+
+    // Ensure pemainId exists for socket identification
+    if (!parsedData.pemainId) {
+      parsedData.pemainId = `p_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+      localStorage.setItem('pemainData', JSON.stringify(parsedData));
+    }
+
     setPemainData(parsedData);
 
-    // Simulasi pemain lain (nanti bisa dari WebSocket)
+    // Simulasi pemain lain (placeholder, nanti bisa dari WebSocket)
     setPemainLain([
       { nama: 'Budi', tim: 'merah', masukAt: new Date().toISOString() },
       { nama: 'Sari', tim: 'putih', masukAt: new Date().toISOString() },
       { nama: 'Rudi', tim: 'merah', masukAt: new Date().toISOString() },
       { nama: 'Dewi', tim: 'putih', masukAt: new Date().toISOString() },
     ]);
-
-    // Simulasi pertanyaan dari game master (nanti bisa dari WebSocket)
-    setTimeout(() => {
-      setPertanyaan({
-        id: '1',
-        pertanyaan: 'Apa ibukota Indonesia?',
-        pilihan: ['Jakarta', 'Bandung', 'Surabaya', 'Yogyakarta'],
-        waktu: 30
-      });
-      setStatus('pertanyaan');
-      setWaktuTersisa(30);
-    }, 5000);
   }, [router]);
 
-  useEffect(() => {
-    let interval: NodeJS.Timeout;
-    
-    if (status === 'pertanyaan' && waktuTersisa > 0) {
-      interval = setInterval(() => {
-        setWaktuTersisa(prev => {
-          if (prev <= 1) {
-            // Waktu habis, tunjukkan hasil
-            setStatus('hasil');
-            setHasil({
-              jawabanBenar: 'Jakarta',
-              skorTim: { merah: 85, putih: 92 },
-              pemenang: 'putih'
-            });
-            return 0;
-          }
-          return prev - 1;
-        });
-      }, 1000);
-    }
-
-    return () => {
-      if (interval) clearInterval(interval);
+  const userForSocket = useMemo(() => {
+    if (!pemainData) return null;
+    return {
+      pemainId: pemainData.pemainId as string,
+      nama: pemainData.nama,
+      tim: pemainData.tim === 'merah' ? 'merah' as const : 'putih' as const,
     };
-  }, [status, waktuTersisa]);
+  }, [pemainData]);
 
-  const handleJawab = (jawaban: string) => {
-    setJawabanDipilih(jawaban);
+  const handleBattleStart = (battleData: any) => {
+    // Map battle data to local pertanyaan shape
+    const pilihanArray: string[] = battleData?.pilihanJawaban
+      ? Object.values(battleData.pilihanJawaban).map((v) => String(v))
+      : [];
+
+    setPertanyaan({
+      id: battleData?.id || 'unknown',
+      pertanyaan: battleData?.pertanyaan || '',
+      pilihan: pilihanArray,
+      waktu: 0,
+    });
+    setJawabanDipilih(null);
+    setWaktuTersisa(0);
+    setStatus('pertanyaan');
   };
 
-  const handleLanjutkan = () => {
-    // Reset untuk pertanyaan berikutnya
+  const handleBattleEnd = () => {
+    // Kembali ke status menunggu ketika battle selesai
     setStatus('menunggu');
     setPertanyaan(null);
     setJawabanDipilih(null);
-    setHasil(null);
-    
-    // Simulasi pertanyaan berikutnya
-    setTimeout(() => {
-      setPertanyaan({
-        id: '2',
-        pertanyaan: 'Berapa hasil dari 7 x 8?',
-        pilihan: ['54', '56', '58', '60'],
-        waktu: 25
-      });
-      setStatus('pertanyaan');
-      setWaktuTersisa(25);
-    }, 3000);
+    setWaktuTersisa(0);
+  };
+
+  const handleJawab = (jawaban: string) => {
+    setJawabanDipilih(jawaban);
   };
 
   if (!pemainData) {
@@ -116,6 +103,15 @@ export default function LobbyPage() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-red-50 via-white to-red-100">
+      {/* Socket manager for receiving Game Master triggers */}
+      {userForSocket && (
+        <SocketManager
+          user={userForSocket}
+          onBattleStart={handleBattleStart}
+          onBattleEnd={handleBattleEnd}
+        />
+      )}
+
       {/* Header */}
       <div className="bg-white shadow-sm border-b border-red-100">
         <div className="container mx-auto px-4 py-4">
@@ -161,7 +157,6 @@ export default function LobbyPage() {
                     <p className="text-gray-600 mb-8">
                       Game Master sedang menyiapkan pertanyaan untuk kamu. Sabar ya!
                     </p>
-                    
                     <div className="inline-flex items-center space-x-2 bg-red-50 px-4 py-2 rounded-full">
                       <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse"></div>
                       <span className="text-red-700 font-medium">Menunggu...</span>
@@ -178,22 +173,24 @@ export default function LobbyPage() {
                   exit={{ opacity: 0, y: -20 }}
                   className="bg-white rounded-3xl shadow-xl p-8 border border-red-100"
                 >
-                  {/* Timer */}
-                  <div className="text-center mb-6">
-                    <div className="inline-flex items-center space-x-2 bg-red-100 px-4 py-2 rounded-full">
-                      <Clock className="w-4 h-4 text-red-600" />
-                      <span className="text-red-700 font-bold text-lg">
-                        {waktuTersisa}s
-                      </span>
+                  {/* Timer - tampilkan hanya jika > 0 */}
+                  {waktuTersisa > 0 && (
+                    <div className="text-center mb-6">
+                      <div className="inline-flex items-center space-x-2 bg-red-100 px-4 py-2 rounded-full">
+                        <Clock className="w-4 h-4 text-red-600" />
+                        <span className="text-red-700 font-bold text-lg">
+                          {waktuTersisa}s
+                        </span>
+                      </div>
                     </div>
-                  </div>
+                  )}
 
                   {/* Pertanyaan */}
                   <div className="text-center mb-8">
                     <h2 className="text-2xl font-bold text-gray-900 mb-6">
                       {pertanyaan.pertanyaan}
                     </h2>
-                    
+
                     {/* Pilihan Jawaban */}
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       {pertanyaan.pilihan.map((pilihan, index) => (
@@ -230,52 +227,6 @@ export default function LobbyPage() {
                   )}
                 </motion.div>
               )}
-
-              {status === 'hasil' && hasil && (
-                <motion.div
-                  key="hasil"
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -20 }}
-                  className="bg-white rounded-3xl shadow-xl p-8 border border-red-100"
-                >
-                  <div className="text-center">
-                    <div className={`w-20 h-20 rounded-2xl flex items-center justify-center mx-auto mb-6 ${
-                      hasil.pemenang === pemainData.tim 
-                        ? 'bg-green-500' 
-                        : 'bg-red-500'
-                    }`}>
-                      {hasil.pemenang === pemainData.tim ? (
-                        <Trophy className="w-10 h-10 text-white" />
-                      ) : (
-                        <AlertCircle className="w-10 h-10 text-white" />
-                      )}
-                    </div>
-                    
-                    <h2 className="text-3xl font-bold text-gray-900 mb-4">
-                      {hasil.pemenang === pemainData.tim ? 'Tim Kamu Menang! 🎉' : 'Tim Kamu Kalah 😔'}
-                    </h2>
-                    
-                    <div className="grid grid-cols-2 gap-6 mb-8">
-                      <div className="bg-red-50 rounded-xl p-4">
-                        <div className="text-2xl font-bold text-red-600">{hasil.skorTim.merah}</div>
-                        <div className="text-sm text-red-700">Tim Merah</div>
-                      </div>
-                      <div className="bg-gray-50 rounded-xl p-4">
-                        <div className="text-2xl font-bold text-gray-600">{hasil.skorTim.putih}</div>
-                        <div className="text-sm text-gray-700">Tim Putih</div>
-                      </div>
-                    </div>
-
-                    <button
-                      onClick={handleLanjutkan}
-                      className="bg-gradient-to-r from-red-500 to-red-600 text-white px-8 py-3 rounded-xl font-semibold hover:from-red-600 hover:to-red-700 transition-all duration-200"
-                    >
-                      Lanjutkan ke Pertanyaan Berikutnya
-                    </button>
-                  </div>
-                </motion.div>
-              )}
             </AnimatePresence>
           </div>
 
@@ -299,31 +250,13 @@ export default function LobbyPage() {
                 </div>
 
                 {/* Pemain lain */}
-                {pemainLain.map((pemain, index) => (
-                  <motion.div
-                    key={index}
-                    initial={{ opacity: 0, x: 20 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ delay: index * 0.1 }}
-                    className="flex items-center space-x-3 p-3 bg-gray-50 rounded-xl"
-                  >
-                    <div className={`w-3 h-3 rounded-full ${pemain.tim === 'merah' ? 'bg-red-500' : 'bg-gray-400'}`}></div>
-                    <span className="font-medium text-gray-900">{pemain.nama}</span>
-                  </motion.div>
+                {pemainLain.map((p, i) => (
+                  <div key={i} className="flex items-center space-x-3 p-3 border border-red-100 rounded-xl">
+                    <div className={`w-3 h-3 rounded-full ${p.tim === 'merah' ? 'bg-red-500' : 'bg-gray-400'}`}></div>
+                    <span className="font-medium text-gray-900">{p.nama}</span>
+                    <span className="text-xs text-gray-500">({new Date(p.masukAt).toLocaleTimeString()})</span>
+                  </div>
                 ))}
-              </div>
-
-              {/* Status Game */}
-              <div className="mt-6 p-4 bg-gradient-to-r from-red-50 to-red-100 rounded-xl">
-                <div className="flex items-center space-x-2 mb-2">
-                  <Zap className="w-4 h-4 text-red-600" />
-                  <span className="font-semibold text-red-700">Status Game</span>
-                </div>
-                <div className="text-sm text-red-600">
-                  {status === 'menunggu' && 'Menunggu pertanyaan dari Game Master'}
-                  {status === 'pertanyaan' && 'Sedang menjawab pertanyaan'}
-                  {status === 'hasil' && 'Menampilkan hasil'}
-                </div>
               </div>
             </div>
           </div>

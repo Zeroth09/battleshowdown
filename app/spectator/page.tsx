@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
+import dynamic from 'next/dynamic';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Eye, 
@@ -54,6 +55,9 @@ interface HasilPertanyaan {
   statistikJawaban: Record<string, number>;
 }
 
+// Dynamic import SocketManager (client-only)
+const SocketManager = dynamic(() => import('../../components/SocketManager'), { ssr: false });
+
 export default function SpectatorPage() {
   const [pemain, setPemain] = useState<Pemain[]>([]);
   const [pertanyaanAktif, setPertanyaanAktif] = useState<Pertanyaan | null>(null);
@@ -66,8 +70,15 @@ export default function SpectatorPage() {
   const [hasilPertanyaan, setHasilPertanyaan] = useState<HasilPertanyaan | null>(null);
   const router = useRouter();
 
+  // Minimal user for spectator connection
+  const spectatorUser = useMemo(() => ({
+    pemainId: `spectator_${typeof window !== 'undefined' ? window.location.pathname : ''}_${Date.now()}`,
+    nama: 'Spectator',
+    tim: 'merah' as const,
+  }), []);
+
   useEffect(() => {
-    // Simulasi data pemain
+    // Simulasi data pemain untuk tampilan
     const dataPemain: Pemain[] = [
       { id: '1', nama: 'Budi', tim: 'merah', skor: 85, status: 'online' },
       { id: '2', nama: 'Sari', tim: 'putih', skor: 92, status: 'online' },
@@ -78,13 +89,11 @@ export default function SpectatorPage() {
       { id: '7', nama: 'Joko', tim: 'merah', skor: 72, status: 'online' },
       { id: '8', nama: 'Maya', tim: 'putih', skor: 81, status: 'online' },
     ];
-    
     setPemain(dataPemain);
 
-    // Hitung statistik tim
+    // Hitung statistik tim (dummy)
     const merah = dataPemain.filter(p => p.tim === 'merah');
     const putih = dataPemain.filter(p => p.tim === 'putih');
-    
     setStatistikTim({
       merah: {
         totalSkor: merah.reduce((sum, p) => sum + p.skor, 0),
@@ -99,74 +108,46 @@ export default function SpectatorPage() {
         jawabanBenar: Math.floor(Math.random() * 15) + 10
       }
     });
-
-    // Simulasi pertanyaan aktif
-    setTimeout(() => {
-      setPertanyaanAktif({
-        id: '1',
-        pertanyaan: 'Apa ibukota Indonesia?',
-        pilihan: ['Jakarta', 'Bandung', 'Surabaya', 'Yogyakarta'],
-        jawabanBenar: 'Jakarta',
-        waktu: 30
-      });
-      setStatusGame('pertanyaan');
-      setWaktuTersisa(30);
-    }, 3000);
   }, []);
 
-  useEffect(() => {
-    let interval: NodeJS.Timeout;
-    
-    if (statusGame === 'pertanyaan' && waktuTersisa > 0) {
-      interval = setInterval(() => {
-        setWaktuTersisa(prev => {
-          if (prev <= 1) {
-            // Waktu habis, tunjukkan hasil
-            setStatusGame('hasil');
-            setHasilPertanyaan({
-              jawabanBenar: 'Jakarta',
-              skorTim: { merah: 85, putih: 92 },
-              pemenang: 'putih',
-              statistikJawaban: {
-                'Jakarta': 12,
-                'Bandung': 3,
-                'Surabaya': 2,
-                'Yogyakarta': 1
-              }
-            });
-            return 0;
-          }
-          return prev - 1;
-        });
-      }, 1000);
-    }
-
-    return () => {
-      if (interval) clearInterval(interval);
-    };
-  }, [statusGame, waktuTersisa]);
-
-  const handleLanjutkan = () => {
-    setStatusGame('menunggu');
-    setPertanyaanAktif(null);
+  // Socket handlers: gate question display until GM triggers
+  const handleBattleStart = (battleData: any) => {
+    const pilihanArray: string[] = battleData?.pilihanJawaban ? Object.values(battleData.pilihanJawaban).map((v) => String(v)) : [];
+    setPertanyaanAktif({
+      id: battleData?.id || 'unknown',
+      pertanyaan: battleData?.pertanyaan || '',
+      pilihan: pilihanArray,
+      jawabanBenar: battleData?.jawabanBenar || '',
+      waktu: 0,
+    });
+    setStatusGame('pertanyaan');
+    setWaktuTersisa(0);
     setHasilPertanyaan(null);
-    
-    // Simulasi pertanyaan berikutnya
-    setTimeout(() => {
-      setPertanyaanAktif({
-        id: '2',
-        pertanyaan: 'Berapa hasil dari 7 x 8?',
-        pilihan: ['54', '56', '58', '60'],
-        jawabanBenar: '56',
-        waktu: 25
+  };
+
+  const handleBattleEnd = (result: any) => {
+    // Optional: tampilkan hasil jika tersedia
+    if (result && result.jawabanBenar) {
+      setHasilPertanyaan({
+        jawabanBenar: result.jawabanBenar,
+        skorTim: result.skorTim || { merah: 0, putih: 0 },
+        pemenang: result.pemenang || '',
+        statistikJawaban: result.statistikJawaban || {},
       });
-      setStatusGame('pertanyaan');
-      setWaktuTersisa(25);
-    }, 3000);
+      setStatusGame('hasil');
+    } else {
+      // Jika tidak ada hasil, kembali ke menunggu
+      setPertanyaanAktif(null);
+      setStatusGame('menunggu');
+      setHasilPertanyaan(null);
+    }
   };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-red-50 via-white to-red-100">
+      {/* Socket manager to receive Game Master triggers */}
+      <SocketManager user={spectatorUser} onBattleStart={handleBattleStart} onBattleEnd={handleBattleEnd} />
+
       {/* Header */}
       <div className="bg-white shadow-sm border-b border-red-100">
         <div className="container mx-auto px-4 py-4">
@@ -229,21 +210,22 @@ export default function SpectatorPage() {
                   className="bg-white rounded-3xl shadow-xl p-8 border border-red-100"
                 >
                   {/* Timer */}
-                  <div className="text-center mb-6">
-                    <div className="inline-flex items-center space-x-2 bg-red-100 px-6 py-3 rounded-full">
-                      <Clock className="w-5 h-5 text-red-600" />
-                      <span className="text-red-700 font-bold text-2xl">
-                        {waktuTersisa}s
-                      </span>
+                  {waktuTersisa > 0 && (
+                    <div className="text-center mb-6">
+                      <div className="inline-flex items-center space-x-2 bg-red-100 px-6 py-3 rounded-full">
+                        <Clock className="w-5 h-5 text-red-600" />
+                        <span className="text-red-700 font-bold text-2xl">
+                          {waktuTersisa}s
+                        </span>
+                      </div>
                     </div>
-                  </div>
+                  )}
 
                   {/* Pertanyaan */}
                   <div className="text-center mb-8">
                     <h2 className="text-3xl font-bold text-gray-900 mb-8">
                       {pertanyaanAktif.pertanyaan}
                     </h2>
-                    
                     {/* Pilihan Jawaban */}
                     <div className="grid grid-cols-2 gap-4">
                       {pertanyaanAktif.pilihan.map((pilihan, index) => (
@@ -280,7 +262,6 @@ export default function SpectatorPage() {
                     <h2 className="text-3xl font-bold text-gray-900 mb-6">
                       Hasil Pertanyaan
                     </h2>
-                    
                     {/* Statistik Jawaban */}
                     <div className="grid grid-cols-2 gap-6 mb-8">
                       {Object.entries(hasilPertanyaan.statistikJawaban).map(([jawaban, count]) => (
@@ -302,13 +283,6 @@ export default function SpectatorPage() {
                         </div>
                       ))}
                     </div>
-
-                    <button
-                      onClick={handleLanjutkan}
-                      className="bg-gradient-to-r from-red-500 to-red-600 text-white px-8 py-3 rounded-xl font-semibold hover:from-red-600 hover:to-red-700 transition-all duration-200"
-                    >
-                      Lanjutkan ke Pertanyaan Berikutnya
-                    </button>
                   </div>
                 </motion.div>
               )}
@@ -323,7 +297,6 @@ export default function SpectatorPage() {
                 <BarChart3 className="w-5 h-5 text-red-600 mr-2" />
                 Statistik Tim
               </h3>
-              
               <div className="grid grid-cols-2 gap-4">
                 {/* Tim Merah */}
                 <div className="bg-red-50 rounded-xl p-4 border border-red-200">
@@ -397,25 +370,14 @@ export default function SpectatorPage() {
                 <Users className="w-5 h-5 text-red-600 mr-2" />
                 Daftar Pemain ({pemain.filter(p => p.status === 'online').length} online)
               </h3>
-              
-              <div className="space-y-3 max-h-96 overflow-y-auto">
-                {pemain.map((pemainItem) => (
-                  <div key={pemainItem.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-xl">
+              <div className="space-y-3">
+                {pemain.map((p) => (
+                  <div key={p.id} className="flex items-center justify-between p-3 bg-red-50 rounded-xl border border-red-100">
                     <div className="flex items-center space-x-3">
-                      <div className={`w-3 h-3 rounded-full ${pemainItem.tim === 'merah' ? 'bg-red-500' : 'bg-gray-400'}`}></div>
-                      <span className="font-medium text-gray-900">{pemainItem.nama}</span>
+                      <div className={`w-3 h-3 rounded-full ${p.tim === 'merah' ? 'bg-red-500' : 'bg-gray-400'}`}></div>
+                      <span className="font-medium text-gray-900">{p.nama}</span>
                     </div>
-                    <div className="flex items-center space-x-2">
-                      <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                        pemainItem.tim === 'merah' 
-                          ? 'bg-red-100 text-red-700' 
-                          : 'bg-gray-100 text-gray-700'
-                      }`}>
-                        {pemainItem.tim === 'merah' ? 'Merah' : 'Putih'}
-                      </span>
-                      <span className="text-sm text-gray-500">{pemainItem.skor}</span>
-                      <div className={`w-2 h-2 rounded-full ${pemainItem.status === 'online' ? 'bg-green-500' : 'bg-gray-400'}`}></div>
-                    </div>
+                    <span className="text-xs text-gray-500">{p.status}</span>
                   </div>
                 ))}
               </div>
