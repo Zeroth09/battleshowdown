@@ -39,13 +39,8 @@ export default function LobbyPage() {
     const parsedData = JSON.parse(data);
     setPemainData(parsedData);
 
-    // Simulasi pemain lain (nanti bisa dari WebSocket)
-    setPemainLain([
-      { nama: 'Budi', tim: 'merah', masukAt: new Date().toISOString() },
-      { nama: 'Sari', tim: 'putih', masukAt: new Date().toISOString() },
-      { nama: 'Rudi', tim: 'merah', masukAt: new Date().toISOString() },
-      { nama: 'Dewi', tim: 'putih', masukAt: new Date().toISOString() },
-    ]);
+    // Hapus simulasi pemain lain agar hanya menampilkan pemain real-time ketika tersedia
+    setPemainLain([]);
 
     // Simulasi pertanyaan dari game master (nanti bisa dari WebSocket)
     setTimeout(() => {
