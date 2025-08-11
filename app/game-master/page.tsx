@@ -1,151 +1,73 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
-import { 
-  Send, 
-  Users, 
-  Clock, 
-  Trophy, 
-  Eye, 
-  Plus, 
-  Trash2, 
-  Edit3,
-  Play,
-  Pause,
-  Square
-} from 'lucide-react';
+import { Trophy, Play, Square, Users } from 'lucide-react';
 import { useRouter } from 'next/navigation';
-
-interface Pertanyaan {
-  id: string;
-  pertanyaan: string;
-  pilihan: string[];
-  jawabanBenar: string;
-  waktu: number;
-}
-
-interface Pemain {
-  id: string;
-  nama: string;
-  tim: string;
-  status: 'online' | 'offline';
-  skor: number;
-}
+import { io, Socket } from 'socket.io-client';
 
 export default function GameMasterPage() {
-  const [pertanyaan, setPertanyaan] = useState('');
-  const [pilihan, setPilihan] = useState(['', '', '', '']);
-  const [jawabanBenar, setJawabanBenar] = useState('');
-  const [waktu, setWaktu] = useState(30);
-  const [statusGame, setStatusGame] = useState<'idle' | 'playing' | 'paused'>('idle');
-  const [pertanyaanList, setPertanyaanList] = useState<Pertanyaan[]>([]);
-  const [pemainOnline, setPemainOnline] = useState<Pemain[]>([]);
-  const [pertanyaanAktif, setPertanyaanAktif] = useState<Pertanyaan | null>(null);
-  const [waktuTersisa, setWaktuTersisa] = useState(0);
+  const [isConnected, setIsConnected] = useState(false);
+  const [playersCount, setPlayersCount] = useState(0);
+  const [lastEvent, setLastEvent] = useState<string>('');
   const router = useRouter();
 
-  useEffect(() => {
-    // Simulasi data pemain online
-    setPemainOnline([
-      { id: '1', nama: 'Budi', tim: 'merah', status: 'online', skor: 85 },
-      { id: '2', nama: 'Sari', tim: 'putih', status: 'online', skor: 92 },
-      { id: '3', nama: 'Rudi', tim: 'merah', status: 'online', skor: 78 },
-      { id: '4', nama: 'Dewi', tim: 'putih', status: 'online', skor: 88 },
-      { id: '5', nama: 'Ahmad', tim: 'merah', status: 'offline', skor: 65 },
-    ]);
+  const backendUrl = useMemo(() => (
+    process.env.NEXT_PUBLIC_BACKEND_URL || 'https://battleshowdown-production.up.railway.app'
+  ), []);
 
-    // Simulasi pertanyaan yang sudah ada
-    setPertanyaanList([
-      {
-        id: '1',
-        pertanyaan: 'Apa ibukota Indonesia?',
-        pilihan: ['Jakarta', 'Bandung', 'Surabaya', 'Yogyakarta'],
-        jawabanBenar: 'Jakarta',
-        waktu: 30
-      },
-      {
-        id: '2',
-        pertanyaan: 'Berapa hasil dari 7 x 8?',
-        pilihan: ['54', '56', '58', '60'],
-        jawabanBenar: '56',
-        waktu: 25
-      }
-    ]);
-  }, []);
+  const [socket, setSocket] = useState<Socket | null>(null);
 
   useEffect(() => {
-    let interval: NodeJS.Timeout;
-    
-    if (statusGame === 'playing' && waktuTersisa > 0) {
-      interval = setInterval(() => {
-        setWaktuTersisa(prev => {
-          if (prev <= 1) {
-            // Waktu habis, game selesai
-            setStatusGame('idle');
-            setPertanyaanAktif(null);
-            return 0;
-          }
-          return prev - 1;
-        });
-      }, 1000);
-    }
+    const s = io(backendUrl, {
+      transports: ['websocket', 'polling'],
+      timeout: 20000,
+      reconnection: true,
+      reconnectionAttempts: 5,
+      reconnectionDelay: 1000,
+      forceNew: true,
+    });
 
+    s.on('connect', () => {
+      setIsConnected(true);
+    });
+
+    s.on('disconnect', () => {
+      setIsConnected(false);
+    });
+
+    s.on('lobby-update', (data: any) => {
+      setPlayersCount(data?.count || 0);
+    });
+
+    s.on('global-battle-start', () => {
+      setLastEvent('Global battle started');
+    });
+
+    s.on('global-battle-end', () => {
+      setLastEvent('Global battle ended');
+    });
+
+    setSocket(s);
     return () => {
-      if (interval) clearInterval(interval);
+      s.close();
     };
-  }, [statusGame, waktuTersisa]);
+  }, [backendUrl]);
 
-  const handleTambahPertanyaan = () => {
-    if (!pertanyaan.trim() || pilihan.some(p => !p.trim()) || !jawabanBenar) {
-      alert('Mohon lengkapi semua field!');
-      return;
-    }
+  const gameMasterId = useMemo(() => `gm_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`, []);
 
-    const pertanyaanBaru: Pertanyaan = {
-      id: Date.now().toString(),
-      pertanyaan: pertanyaan.trim(),
-      pilihan: pilihan.map(p => p.trim()),
-      jawabanBenar: jawabanBenar.trim(),
-      waktu: parseInt(waktu.toString())
-    };
-
-    setPertanyaanList(prev => [...prev, pertanyaanBaru]);
-    
-    // Reset form
-    setPertanyaan('');
-    setPilihan(['', '', '', '']);
-    setJawabanBenar('');
-    setWaktu(30);
+  const triggerBattle = () => {
+    if (!socket) return;
+    socket.emit('game-master-trigger-battle', { gameMasterId });
   };
 
-  const handleHapusPertanyaan = (id: string) => {
-    setPertanyaanList(prev => prev.filter(p => p.id !== id));
-  };
-
-  const handleMulaiGame = (pertanyaan: Pertanyaan) => {
-    setPertanyaanAktif(pertanyaan);
-    setWaktuTersisa(pertanyaan.waktu);
-    setStatusGame('playing');
-  };
-
-  const handlePauseGame = () => {
-    setStatusGame('paused');
-  };
-
-  const handleResumeGame = () => {
-    setStatusGame('playing');
-  };
-
-  const handleStopGame = () => {
-    setStatusGame('idle');
-    setPertanyaanAktif(null);
-    setWaktuTersisa(0);
+  const endBattle = () => {
+    if (!socket) return;
+    socket.emit('game-master-end-battle', { result: { reason: 'ended-by-gm' }, gameMasterId });
   };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-red-50 via-white to-red-100">
-      {/* Header */}
       <div className="bg-white shadow-sm border-b border-red-100">
         <div className="container mx-auto px-4 py-4">
           <div className="flex items-center justify-between">
@@ -155,17 +77,11 @@ export default function GameMasterPage() {
               </div>
               <div>
                 <h1 className="text-xl font-bold text-gray-900">Game Master Panel</h1>
-                <p className="text-sm text-gray-500">Kontrol game battle showdown</p>
+                <p className="text-sm text-gray-500">Trigger pertanyaan secara real-time</p>
               </div>
             </div>
-            <div className="flex items-center space-x-3">
-              <button
-                onClick={() => router.push('/spectator')}
-                className="flex items-center space-x-2 bg-red-500 text-white px-4 py-2 rounded-xl hover:bg-red-600 transition-colors"
-              >
-                <Eye className="w-4 h-4" />
-                <span>Spectator</span>
-              </button>
+            <div className={`px-3 py-1 rounded-lg text-sm font-medium ${isConnected ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+              {isConnected ? 'Terhubung' : 'Terputus'}
             </div>
           </div>
         </div>
@@ -173,244 +89,39 @@ export default function GameMasterPage() {
 
       <div className="container mx-auto px-4 py-8">
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          {/* Main Content - Form Pertanyaan */}
           <div className="lg:col-span-2">
-            <div className="bg-white rounded-3xl shadow-xl p-8 border border-red-100 mb-8">
+            <div className="bg-white rounded-3xl shadow-xl p-8 border border-red-100">
               <h2 className="text-2xl font-bold text-gray-900 mb-6 flex items-center">
-                <Plus className="w-6 h-6 text-red-600 mr-2" />
-                Tambah Pertanyaan Baru
+                <Play className="w-6 h-6 text-red-600 mr-2" />
+                Kontrol Pertempuran
               </h2>
 
-              <form onSubmit={(e) => { e.preventDefault(); handleTambahPertanyaan(); }} className="space-y-6">
-                {/* Pertanyaan */}
-                <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">
-                    Pertanyaan
-                  </label>
-                  <textarea
-                    value={pertanyaan}
-                    onChange={(e) => setPertanyaan(e.target.value)}
-                    placeholder="Masukkan pertanyaan untuk pemain..."
-                    className="w-full p-4 border-2 border-red-200 rounded-xl focus:border-red-500 focus:ring-2 focus:ring-red-200 transition-all duration-200 resize-none"
-                    rows={3}
-                    required
-                  />
-                </div>
-
-                {/* Pilihan Jawaban */}
-                <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">
-                    Pilihan Jawaban
-                  </label>
-                  <div className="grid grid-cols-2 gap-4">
-                    {pilihan.map((pilihanItem, index) => (
-                      <div key={index}>
-                        <label className="block text-xs text-gray-600 mb-1">
-                          Pilihan {index + 1}
-                        </label>
-                        <input
-                          type="text"
-                          value={pilihanItem}
-                          onChange={(e) => {
-                            const newPilihan = [...pilihan];
-                            newPilihan[index] = e.target.value;
-                            setPilihan(newPilihan);
-                          }}
-                          placeholder={`Pilihan ${index + 1}`}
-                          className="w-full p-3 border-2 border-red-200 rounded-lg focus:border-red-500 focus:ring-2 focus:ring-red-200 transition-all duration-200"
-                          required
-                        />
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Jawaban Benar & Waktu */}
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-semibold text-gray-700 mb-2">
-                      Jawaban Benar
-                    </label>
-                    <select
-                      value={jawabanBenar}
-                      onChange={(e) => setJawabanBenar(e.target.value)}
-                      className="w-full p-3 border-2 border-red-200 rounded-lg focus:border-red-500 focus:ring-2 focus:ring-red-200 transition-all duration-200"
-                      required
-                    >
-                      <option value="">Pilih jawaban benar</option>
-                      {pilihan.map((pilihanItem, index) => (
-                        pilihanItem.trim() && (
-                          <option key={index} value={pilihanItem.trim()}>
-                            {pilihanItem.trim()}
-                          </option>
-                        )
-                      ))}
-                    </select>
-                  </div>
-                  
-                  <div>
-                    <label className="block text-sm font-semibold text-gray-700 mb-2">
-                      Waktu (detik)
-                    </label>
-                    <input
-                      type="number"
-                      value={waktu}
-                      onChange={(e) => setWaktu(parseInt(e.target.value))}
-                      min="10"
-                      max="120"
-                      className="w-full p-3 border-2 border-red-200 rounded-lg focus:border-red-500 focus:ring-2 focus:ring-red-200 transition-all duration-200"
-                      required
-                    />
-                  </div>
-                </div>
-
-                {/* Submit Button */}
-                <button
-                  type="submit"
-                  className="w-full bg-gradient-to-r from-red-500 to-red-600 text-white py-4 px-6 rounded-xl font-bold text-lg hover:from-red-600 hover:to-red-700 transition-all duration-200 flex items-center justify-center"
-                >
-                  <Send className="w-5 h-5 mr-2" />
-                  Tambah Pertanyaan
+              <div className="flex items-center space-x-4">
+                <button onClick={triggerBattle} className="px-6 py-3 bg-red-600 hover:bg-red-700 text-white font-semibold rounded-xl flex items-center">
+                  <Play className="w-5 h-5 mr-2" /> Mulai Pertanyaan
                 </button>
-              </form>
-            </div>
-
-            {/* Daftar Pertanyaan */}
-            <div className="bg-white rounded-3xl shadow-xl p-8 border border-red-100">
-              <h2 className="text-2xl font-bold text-gray-900 mb-6">Daftar Pertanyaan</h2>
-              
-              <div className="space-y-4">
-                {pertanyaanList.map((pertanyaanItem) => (
-                  <div key={pertanyaanItem.id} className="border-2 border-red-100 rounded-xl p-4 hover:border-red-200 transition-colors">
-                    <div className="flex items-start justify-between mb-3">
-                      <h3 className="font-semibold text-gray-900">{pertanyaanItem.pertanyaan}</h3>
-                      <div className="flex items-center space-x-2">
-                        <button
-                          onClick={() => handleMulaiGame(pertanyaanItem)}
-                          className="p-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors"
-                          title="Mulai Game"
-                        >
-                          <Play className="w-4 h-4" />
-                        </button>
-                        <button
-                          onClick={() => handleHapusPertanyaan(pertanyaanItem.id)}
-                          className="p-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors"
-                          title="Hapus"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      </div>
-                    </div>
-                    
-                    <div className="grid grid-cols-2 gap-2 mb-3">
-                      {pertanyaanItem.pilihan.map((pilihanItem, index) => (
-                        <div key={index} className="text-sm text-gray-600">
-                          {index + 1}. {pilihanItem}
-                          {pilihanItem === pertanyaanItem.jawabanBenar && (
-                            <span className="ml-2 text-green-600 font-semibold">✓</span>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                    
-                    <div className="flex items-center justify-between text-sm text-gray-500">
-                      <span>Waktu: {pertanyaanItem.waktu}s</span>
-                      <span>Jawaban: {pertanyaanItem.jawabanBenar}</span>
-                    </div>
-                  </div>
-                ))}
+                <button onClick={endBattle} className="px-6 py-3 bg-gray-600 hover:bg-gray-700 text-white font-semibold rounded-xl flex items-center">
+                  <Square className="w-5 h-5 mr-2" /> Akhiri Pertanyaan
+                </button>
               </div>
-            </div>
-          </div>
 
-          {/* Sidebar - Status Game & Pemain */}
-          <div className="lg:col-span-1 space-y-6">
-            {/* Status Game */}
-            <div className="bg-white rounded-3xl shadow-xl p-6 border border-red-100">
-              <h3 className="font-semibold text-gray-900 mb-4 flex items-center">
-                <Clock className="w-5 h-5 text-red-600 mr-2" />
-                Status Game
-              </h3>
-              
-              {statusGame === 'idle' ? (
-                <div className="text-center py-8">
-                  <div className="w-16 h-16 bg-gray-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
-                    <Square className="w-8 h-8 text-gray-400" />
-                  </div>
-                  <p className="text-gray-500">Game belum dimulai</p>
-                </div>
-              ) : (
-                <div className="text-center">
-                  <div className="w-16 h-16 bg-red-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
-                    {statusGame === 'playing' ? (
-                      <Play className="w-8 h-8 text-red-600" />
-                    ) : (
-                      <Pause className="w-8 h-8 text-red-600" />
-                    )}
-                  </div>
-                  
-                  <h4 className="font-semibold text-gray-900 mb-2">
-                    {pertanyaanAktif?.pertanyaan}
-                  </h4>
-                  
-                  <div className="text-3xl font-bold text-red-600 mb-4">
-                    {waktuTersisa}s
-                  </div>
-                  
-                  <div className="flex space-x-2">
-                    {statusGame === 'playing' ? (
-                      <button
-                        onClick={handlePauseGame}
-                        className="flex-1 bg-yellow-500 text-white py-2 px-4 rounded-lg hover:bg-yellow-600 transition-colors"
-                      >
-                        Pause
-                      </button>
-                    ) : (
-                      <button
-                        onClick={handleResumeGame}
-                        className="flex-1 bg-green-500 text-white py-2 px-4 rounded-lg hover:bg-green-600 transition-colors"
-                      >
-                        Resume
-                      </button>
-                    )}
-                    <button
-                      onClick={handleStopGame}
-                      className="flex-1 bg-red-500 text-white py-2 px-4 rounded-lg hover:bg-red-600 transition-colors"
-                    >
-                      Stop
-                    </button>
-                  </div>
+              {lastEvent && (
+                <div className="mt-6 p-4 bg-red-50 border border-red-100 rounded-xl text-red-700">
+                  {lastEvent}
                 </div>
               )}
             </div>
+          </div>
 
-            {/* Daftar Pemain */}
-            <div className="bg-white rounded-3xl shadow-xl p-6 border border-red-100">
-              <h3 className="font-semibold text-gray-900 mb-4 flex items-center">
-                <Users className="w-5 h-5 text-red-600 mr-2" />
-                Pemain Online ({pemainOnline.filter(p => p.status === 'online').length})
-              </h3>
-              
-              <div className="space-y-3">
-                {pemainOnline.map((pemain) => (
-                  <div key={pemain.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-xl">
-                    <div className="flex items-center space-x-3">
-                      <div className={`w-3 h-3 rounded-full ${pemain.tim === 'merah' ? 'bg-red-500' : 'bg-gray-400'}`}></div>
-                      <span className="font-medium text-gray-900">{pemain.nama}</span>
-                    </div>
-                    <div className="flex items-center space-x-2">
-                      <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                        pemain.tim === 'merah' 
-                          ? 'bg-red-100 text-red-700' 
-                          : 'bg-gray-100 text-gray-700'
-                      }`}>
-                        {pemain.tim === 'merah' ? 'Merah' : 'Putih'}
-                      </span>
-                      <span className="text-sm text-gray-500">{pemain.skor}</span>
-                      <div className={`w-2 h-2 rounded-full ${pemain.status === 'online' ? 'bg-green-500' : 'bg-gray-400'}`}></div>
-                    </div>
-                  </div>
-                ))}
+          <div>
+            <div className="bg-white rounded-3xl shadow-xl p-8 border border-red-100">
+              <h2 className="text-2xl font-bold text-gray-900 mb-6 flex items-center">
+                <Users className="w-6 h-6 text-red-600 mr-2" />
+                Peserta Online
+              </h2>
+              <div className="text-center">
+                <div className="text-5xl font-extrabold text-gray-900 mb-2">{playersCount}</div>
+                <p className="text-gray-500">Total peserta terhubung</p>
               </div>
             </div>
           </div>

@@ -43,6 +43,8 @@ interface SocketManagerProps {
   onBattleStart?: (battleData: Battle) => void;
   onBattleEnd?: (result: any) => void;
   onLiveAnswer?: (answerData: LiveAnswer) => void;
+  onLobbyUpdate?: (data: any) => void;
+  onSpectatorUpdate?: (data: any) => void;
 }
 
 export interface SocketManagerRef {
@@ -54,7 +56,7 @@ export interface SocketManagerRef {
 }
 
 const SocketManager = forwardRef<SocketManagerRef, SocketManagerProps>(
-  ({ user, onReady, onBattleStart, onBattleEnd, onLiveAnswer }, ref) => {
+  ({ user, onReady, onBattleStart, onBattleEnd, onLiveAnswer, onLobbyUpdate, onSpectatorUpdate }, ref) => {
     const [socket, setSocket] = useState<Socket | null>(null);
     const [isConnected, setIsConnected] = useState(false);
     const [connectionAttempts, setConnectionAttempts] = useState(0);
@@ -63,7 +65,7 @@ const SocketManager = forwardRef<SocketManagerRef, SocketManagerProps>(
     // Initialize socket connection with retry logic
     const initializeSocket = useCallback(() => {
       try {
-        const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'https://battleshowdownback-production-df38.up.railway.app';
+        const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'https://battleshowdown-production.up.railway.app';
         
         console.log('🔌 Attempting to connect to:', backendUrl);
         
@@ -195,25 +197,33 @@ const SocketManager = forwardRef<SocketManagerRef, SocketManagerProps>(
         // Lobby events
         newSocket.on('lobby-update', (data: any) => {
           console.log('👥 Lobby updated:', data);
+          try {
+            onLobbyUpdate?.(data);
+          } catch (error) {
+            console.error('Error in lobby-update handler:', error);
+          }
         });
 
         // Spectator events
         newSocket.on('spectator-update', (data: any) => {
           console.log('👁️ Spectator update:', data);
+          try {
+            onSpectatorUpdate?.(data);
+          } catch (error) {
+            console.error('Error in spectator-update handler:', error);
+          }
         });
 
         setSocket(newSocket);
 
-        // Call onReady after connection is established
-        setTimeout(() => {
-          if (onReady && isConnected) {
-            try {
-              onReady();
-            } catch (error) {
-              console.error('Error in onReady callback:', error);
-            }
+        // Call onReady immediately on connect
+        if (onReady) {
+          try {
+            onReady();
+          } catch (error) {
+            console.error('Error in onReady callback:', error);
           }
-        }, 2000);
+        }
 
         return () => {
           console.log('🧹 Cleaning up socket connection');
