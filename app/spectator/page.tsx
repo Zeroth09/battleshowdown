@@ -67,37 +67,13 @@ export default function SpectatorPage() {
   const router = useRouter();
 
   useEffect(() => {
-    // Simulasi data pemain
-    const dataPemain: Pemain[] = [
-      { id: '1', nama: 'Budi', tim: 'merah', skor: 85, status: 'online' },
-      { id: '2', nama: 'Sari', tim: 'putih', skor: 92, status: 'online' },
-      { id: '3', nama: 'Rudi', tim: 'merah', skor: 78, status: 'online' },
-      { id: '4', nama: 'Dewi', tim: 'putih', skor: 88, status: 'online' },
-      { id: '5', nama: 'Ahmad', tim: 'merah', skor: 65, status: 'offline' },
-      { id: '6', nama: 'Nina', tim: 'putih', skor: 95, status: 'online' },
-      { id: '7', nama: 'Joko', tim: 'merah', skor: 72, status: 'online' },
-      { id: '8', nama: 'Maya', tim: 'putih', skor: 81, status: 'online' },
-    ];
-    
-    setPemain(dataPemain);
+    // Hapus simulasi data pemain; menunggu data real-time bila tersedia
+    setPemain([]);
 
-    // Hitung statistik tim
-    const merah = dataPemain.filter(p => p.tim === 'merah');
-    const putih = dataPemain.filter(p => p.tim === 'putih');
-    
+    // Hitung statistik tim awal kosong
     setStatistikTim({
-      merah: {
-        totalSkor: merah.reduce((sum, p) => sum + p.skor, 0),
-        pemainCount: merah.length,
-        rataRataSkor: Math.round(merah.reduce((sum, p) => sum + p.skor, 0) / merah.length),
-        jawabanBenar: Math.floor(Math.random() * 15) + 10
-      },
-      putih: {
-        totalSkor: putih.reduce((sum, p) => sum + p.skor, 0),
-        pemainCount: putih.length,
-        rataRataSkor: Math.round(putih.reduce((sum, p) => sum + p.skor, 0) / putih.length),
-        jawabanBenar: Math.floor(Math.random() * 15) + 10
-      }
+      merah: { totalSkor: 0, pemainCount: 0, rataRataSkor: 0, jawabanBenar: 0 },
+      putih: { totalSkor: 0, pemainCount: 0, rataRataSkor: 0, jawabanBenar: 0 }
     });
 
     // Simulasi pertanyaan aktif
