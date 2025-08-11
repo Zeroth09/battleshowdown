@@ -4,7 +4,7 @@ const nextConfig = {
     domains: ['images.unsplash.com', 'via.placeholder.com', 'picsum.photos'],
   },
   env: {
-    NEXT_PUBLIC_BACKEND_URL: process.env.NEXT_PUBLIC_BACKEND_URL || 'https://battleshowdown-production.up.railway.app',
+    NEXT_PUBLIC_BACKEND_URL: process.env.NEXT_PUBLIC_BACKEND_URL || 'https://battleshowdownback-production.up.railway.app',
   },
   async headers() {
     return [

@@ -65,7 +65,13 @@ const SocketManager = forwardRef<SocketManagerRef, SocketManagerProps>(
     // Initialize socket connection with retry logic
     const initializeSocket = useCallback(() => {
       try {
-        const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'https://battleshowdown-production.up.railway.app';
+        const primaryUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'https://battleshowdownback-production.up.railway.app';
+        const fallbackUrls = [
+          'https://battleshowdownback-production.up.railway.app',
+          'https://battleshowdown-production.up.railway.app'
+        ];
+        const candidateUrls = [primaryUrl, ...fallbackUrls].filter((v, i, arr) => !!v && arr.indexOf(v) === i);
+        const backendUrl = candidateUrls[0];
         
         console.log('🔌 Attempting to connect to:', backendUrl);
         
@@ -109,6 +115,27 @@ const SocketManager = forwardRef<SocketManagerRef, SocketManagerProps>(
             
             setTimeout(() => {
               if (newSocket.disconnected) {
+                // Try next URL fallback if available by re-instantiating socket
+                const nextIndex = (connectionAttempts + 1) % candidateUrls.length;
+                const nextUrl = candidateUrls[nextIndex];
+                if (nextUrl && nextUrl !== backendUrl) {
+                  console.log('🔄 Recreating Socket.IO client with endpoint:', nextUrl);
+                  try {
+                    newSocket.removeAllListeners();
+                    newSocket.close();
+                  } catch (_) {}
+                  const replacement = io(nextUrl, {
+                    transports: ['websocket', 'polling'],
+                    timeout: 20000,
+                    reconnection: true,
+                    reconnectionAttempts: 5,
+                    reconnectionDelay: 1000,
+                    forceNew: true,
+                  });
+                  setSocket(replacement);
+                  replacement.connect();
+                  return;
+                }
                 newSocket.connect();
               }
             }, 2000);

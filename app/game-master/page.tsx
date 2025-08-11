@@ -13,7 +13,7 @@ export default function GameMasterPage() {
   const router = useRouter();
 
   const backendUrl = useMemo(() => (
-    process.env.NEXT_PUBLIC_BACKEND_URL || 'https://battleshowdown-production.up.railway.app'
+    process.env.NEXT_PUBLIC_BACKEND_URL || 'https://battleshowdownback-production.up.railway.app'
   ), []);
 
   const [socket, setSocket] = useState<Socket | null>(null);
