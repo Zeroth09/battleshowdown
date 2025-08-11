@@ -39,25 +39,28 @@ export default function LobbyPage() {
     const parsedData = JSON.parse(data);
     setPemainData(parsedData);
 
-    // Simulasi pemain lain (nanti bisa dari WebSocket)
-    setPemainLain([
-      { nama: 'Budi', tim: 'merah', masukAt: new Date().toISOString() },
-      { nama: 'Sari', tim: 'putih', masukAt: new Date().toISOString() },
-      { nama: 'Rudi', tim: 'merah', masukAt: new Date().toISOString() },
-      { nama: 'Dewi', tim: 'putih', masukAt: new Date().toISOString() },
-    ]);
+    const enableDummy = process.env.NEXT_PUBLIC_ENABLE_DUMMY === '1';
+    if (enableDummy) {
+      // Simulasi pemain lain (opsional untuk demo)
+      setPemainLain([
+        { nama: 'Budi', tim: 'merah', masukAt: new Date().toISOString() },
+        { nama: 'Sari', tim: 'putih', masukAt: new Date().toISOString() },
+        { nama: 'Rudi', tim: 'merah', masukAt: new Date().toISOString() },
+        { nama: 'Dewi', tim: 'putih', masukAt: new Date().toISOString() },
+      ]);
 
-    // Simulasi pertanyaan dari game master (nanti bisa dari WebSocket)
-    setTimeout(() => {
-      setPertanyaan({
-        id: '1',
-        pertanyaan: 'Apa ibukota Indonesia?',
-        pilihan: ['Jakarta', 'Bandung', 'Surabaya', 'Yogyakarta'],
-        waktu: 30
-      });
-      setStatus('pertanyaan');
-      setWaktuTersisa(30);
-    }, 5000);
+      // Simulasi pertanyaan dari game master (opsional untuk demo)
+      setTimeout(() => {
+        setPertanyaan({
+          id: '1',
+          pertanyaan: 'Apa ibukota Indonesia?',
+          pilihan: ['Jakarta', 'Bandung', 'Surabaya', 'Yogyakarta'],
+          waktu: 30
+        });
+        setStatus('pertanyaan');
+        setWaktuTersisa(30);
+      }, 5000);
+    }
   }, [router]);
 
   useEffect(() => {

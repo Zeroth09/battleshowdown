@@ -43,6 +43,7 @@ interface SocketManagerProps {
   onBattleStart?: (battleData: Battle) => void;
   onBattleEnd?: (result: any) => void;
   onLiveAnswer?: (answerData: LiveAnswer) => void;
+  onLobbyUpdate?: (data: { players: User[]; count: number }) => void;
 }
 
 export interface SocketManagerRef {
@@ -54,7 +55,7 @@ export interface SocketManagerRef {
 }
 
 const SocketManager = forwardRef<SocketManagerRef, SocketManagerProps>(
-  ({ user, onReady, onBattleStart, onBattleEnd, onLiveAnswer }, ref) => {
+  ({ user, onReady, onBattleStart, onBattleEnd, onLiveAnswer, onLobbyUpdate }, ref) => {
     const [socket, setSocket] = useState<Socket | null>(null);
     const [isConnected, setIsConnected] = useState(false);
     const [connectionAttempts, setConnectionAttempts] = useState(0);
@@ -195,6 +196,11 @@ const SocketManager = forwardRef<SocketManagerRef, SocketManagerProps>(
         // Lobby events
         newSocket.on('lobby-update', (data: any) => {
           console.log('👥 Lobby updated:', data);
+          try {
+            onLobbyUpdate?.(data);
+          } catch (error) {
+            console.error('Error in lobby-update handler:', error);
+          }
         });
 
         // Spectator events
