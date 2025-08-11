@@ -97,7 +97,7 @@ export default function HomePage() {
                     className={`p-4 rounded-xl border-2 transition-all duration-200 ${
                       tim === 'merah'
                         ? 'border-red-500 bg-red-500 text-white shadow-lg scale-105'
-                        : 'border-red-200 bg-red-50 hover:border-red-300 hover:bg-red-100'
+                        : 'border-red-200 bg-red-50 hover:border-red-300 hover:bg-red-100 text-red-700 hover:text-red-800'
                     }`}
                   >
                     <div className="text-center">
@@ -112,7 +112,7 @@ export default function HomePage() {
                     className={`p-4 rounded-xl border-2 transition-all duration-200 ${
                       tim === 'putih'
                         ? 'border-gray-400 bg-gray-100 text-gray-800 shadow-lg scale-105'
-                        : 'border-gray-200 bg-gray-50 hover:border-gray-300 hover:bg-gray-100'
+                        : 'border-gray-200 bg-gray-50 hover:border-gray-300 hover:bg-gray-100 text-gray-700 hover:text-gray-800'
                     }`}
                   >
                     <div className="text-center">
