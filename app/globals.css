@@ -131,6 +131,14 @@ a {
   }
 }
 
+@layer base {
+  input,
+  textarea,
+  select {
+    @apply text-gray-900 placeholder-gray-400;
+  }
+}
+
 /* Battle animations */
 .battle-enter {
   animation: battleEnter 0.5s ease-out;
